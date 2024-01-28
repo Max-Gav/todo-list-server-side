@@ -57,7 +57,16 @@ async def loginUser(request: Request, response: Response, user: LoginUser):
         raise error
     except Exception:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
-        
+
+# Logout User
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def loginUser(response: Response, user: LoginUser):
+    try:
+        response.delete_cookie("access-token")
+        return {"Message":"User logged out"}
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
+
 
         
         
