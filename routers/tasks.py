@@ -17,14 +17,11 @@ router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(getAcc
 
 # Get Tasks
 @router.get("/get", status_code=status.HTTP_200_OK)
-async def getTasks(request: Request, status: str = None, accessTokenData: dict = Depends(getAccessTokenData)):
+async def getTasks(request: Request, accessTokenData: dict = Depends(getAccessTokenData)):
     try:
         # Setting up the query filters
         tasksFilters:dict = {}
-        
-        if(status in ["Not Started","In Progress", "Completed"]):
-            tasksFilters["status"] = status
-            
+    
         role = accessTokenData.get('role')
         if role == "user":
             tasksFilters["user_id"] = accessTokenData.get("id")
