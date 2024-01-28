@@ -60,7 +60,7 @@ def setAccessTokenInResponse(request:Request,response: Response, token: str):
     
     # Checking the source of the request
     if userAgent == "web":
-        response.set_cookie('access_token', token, max_age=6000)
+        response.set_cookie('access_token', token, max_age=6000,httponly=True)
     elif userAgent == "mobile":
         pass
         # TODO: Save the access token for mobile users
