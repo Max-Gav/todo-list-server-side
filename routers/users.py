@@ -20,19 +20,23 @@ async def getUsers(request: Request):
 
 # Sign Up User
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-async def createUser(request: Request, response: Response, user: CreateUser):
+async def createUser(request: Request, response: Response, userDetails: CreateUser):
     try:
-        # Default new user properties
-        user.role = "user"
-        user.password = encryptPassword(user.password)
-        user.created_at = datetime.utcnow()
+        # User properties
+        user:dict = {}
+        user["username"] = userDetails.username
+        user["email"] = userDetails.email
+        user["role"] = "user"
+        user["password"] = encryptPassword(userDetails.password)
+        user["created_at"] = datetime.utcnow()
         
         # Creating a new user
-        newUser=request.app.database["users"].insert_one(user.model_dump())
+        newUser=request.app.database["users"].insert_one(user)
         
-        setAccessToken(userId=str(newUser.inserted_id), userRole=user.role, request=request, response=response)
+        setAccessToken(userId=str(newUser.inserted_id), userRole=user["role"], request=request, response=response)
         return {"Message":"Created a user"}
     except Exception as error:
+        print(error)
         if hasattr(error, 'code') and error.code == 11000:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"Error":"User's email already exists."})
         else:
@@ -60,7 +64,7 @@ async def loginUser(request: Request, response: Response, user: LoginUser):
 
 # Logout User
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def loginUser(response: Response, user: LoginUser):
+async def loginUser(response: Response):
     try:
         response.delete_cookie("access-token")
         return {"Message":"User logged out"}

@@ -36,15 +36,20 @@ async def getTasks(request: Request, accessTokenData: dict = Depends(getAccessTo
 
 # Add a Task
 @router.post("/add", status_code=status.HTTP_201_CREATED)
-async def addTask(request: Request, task: CreateTask, accessTokenData: dict = Depends(getAccessTokenData)):
+async def addTask(request: Request, taskMessage:CreateTask, accessTokenData: dict = Depends(getAccessTokenData)):
     try:
-        # Default task properties
-        task.status = "Not Started"
-        task.created_at = datetime.utcnow()
-        
-        role = accessTokenData["role"]
-        tokenUserId = accessTokenData.get("id")
+        # Success message string
         successMessage = "Task created for"
+
+        # Task properties
+        task:dict = {}
+        task["message"] = taskMessage.message
+        task["status"] = "Not Started"
+        task["created_at"] = datetime.utcnow()
+        
+        # Getting access token data
+        role = accessTokenData["role"]
+        tokenUserId = accessTokenData["id"]
 
         # Checking what User ID to use for the task
         if role == "admin":
@@ -60,10 +65,10 @@ async def addTask(request: Request, task: CreateTask, accessTokenData: dict = De
                 successMessage += " the admin"   
         else:
             successMessage += " the user"
-            task.user_id = tokenUserId
+            task["user_id"] = tokenUserId
             
         # Saving the task
-        request.app.database["tasks"].insert_one(task.model_dump())
+        request.app.database["tasks"].insert_one(task)
         
         return {"Message": successMessage}
     except HTTPException as error:
