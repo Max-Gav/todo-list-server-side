@@ -72,7 +72,7 @@ async def addTask(request: Request, task: CreateTask, accessTokenData: dict = De
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
     
 # Delete a task
-@router.delete("/delete")
+@router.delete("/delete", status_code=status.HTTP_200_OK)
 async def deleteTask(request:Request, taskId:str, accessTokenData:dict = Depends(getAccessTokenData)):
     try:
         # Checking if the task ID is valid
@@ -93,7 +93,7 @@ async def deleteTask(request:Request, taskId:str, accessTokenData:dict = Depends
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
 
 # Delete all completed tasks
-@router.delete("/delete-completed")
+@router.delete("/delete-completed", status_code=status.HTTP_200_OK)
 async def deleteCompletedTask(request:Request, accessTokenData:dict = Depends(getAccessTokenData)):
     try:
         # Deleting all completed tasks
@@ -111,7 +111,7 @@ async def deleteCompletedTask(request:Request, accessTokenData:dict = Depends(ge
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
 
 # Update a task 
-@router.patch("/update")
+@router.patch("/update", status_code=status.HTTP_200_OK)
 async def updateTask(request:Request, task:UpdateTask, accessTokenData:dict = Depends(getAccessTokenData)):
     try:
         # Checking if the task ID is valid
