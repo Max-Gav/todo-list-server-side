@@ -3,11 +3,25 @@ from routers import tasks, users
 from dotenv import load_dotenv
 from db.databaseConnect import connectToDatabase, disconnectFromDatabase
 from utils.accessTokenUtils import getAccessTokenData
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 load_dotenv()
 
 app:FastAPI = FastAPI()
+
+# Setting up cors middleware
+origins = [
+    "http://localhost:5174","http://localhost:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["Client-Type"],
+)
 
 @app.get('/')
 async def root():

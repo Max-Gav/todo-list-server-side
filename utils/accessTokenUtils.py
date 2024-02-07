@@ -27,24 +27,30 @@ def decodeAccessToken(token: str):
     except Exception:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
     
-# Return the access token data
-def getAccessTokenData(request: Request):
-    try:   
-        userAgent = request.headers.get('User-Agent')
+# Get the access token according to the client type
+def getAccessToken(request: Request):
+        clientType = request.headers.get('Client-Type')
         accessToken = None
 
         # Get the access token according to the user agent
-        if userAgent == "web":
-            accessToken = request.cookies.get('access_token')
-        elif userAgent == "mobile":
+        if clientType == "web":
+            accessToken = request.cookies.get('access-token')
+        elif clientType == "mobile":
             # TODO: Return the access token from the headers for mobile users
             pass
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Invalid or no User-Agent header"})
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Invalid or no Client-Type header"})
 
+        return accessToken
+    
+# Return the access token data
+def getAccessTokenData(request: Request):
+    try:   
+        accessToken = getAccessToken(request)
+        
         # Check if an access token was found
         if accessToken == None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Access token not found"})
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"Error": "Access token not found"})
         
         # Decoding the access token and returning it
         decodedAccessToken = decodeAccessToken(accessToken)
@@ -56,16 +62,17 @@ def getAccessTokenData(request: Request):
 
 # Set the user's access token in the response
 def setAccessTokenInResponse(request:Request,response: Response, token: str):
-    userAgent = request.headers.get('User-Agent', default=None)
-    
+    clientType = request.headers.get('Client-Type', default=None)
+    print(clientType)
+
     # Checking the source of the request
-    if userAgent == "web":
-        response.set_cookie('access_token', token, max_age=6000,httponly=True)
-    elif userAgent == "mobile":
+    if clientType == "web":
+        response.set_cookie('access-token', token, max_age=6000, httponly=True, secure=True, samesite='none')
+    elif clientType == "mobile":
         pass
         # TODO: Save the access token for mobile users
-    elif userAgent == None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "No user-agent specified"})
+    elif clientType == None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "No client type specified"})
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Invalid user-agent specified"})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Invalid client type specified"})
 

@@ -1,7 +1,7 @@
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from utils.accessTokenUtils import getAccessTokenData
-from models.taskModel import CreateTask, UpdateTask
+from models.taskModel import CreateTask, UpdateTask, TaskDetails
 from datetime import datetime
 
 # Checking if the task ID is valid
@@ -10,6 +10,11 @@ def checkObjectId(objectId):
         return True
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Task ID is not valid."})
+
+# Get the username using the user id
+def getUsername(request, userId):
+    user = request.app.database["users"].find_one({"_id": ObjectId(userId)}, {"username":1})
+    return user.get("username")
     
 
 # Tasks Router
@@ -20,15 +25,18 @@ router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(getAcc
 async def getTasks(request: Request, accessTokenData: dict = Depends(getAccessTokenData)):
     try:
         # Setting up the query filters
-        tasksFilters:dict = {}
+        taskFilters:dict = {}
     
         role = accessTokenData.get('role')
         if role == "user":
-            tasksFilters["user_id"] = accessTokenData.get("id")
+            taskFilters["user_id"] = accessTokenData.get("id")
 
         # Getting the tasks by the filters
-        tasks=list(request.app.database["tasks"].find(tasksFilters,{"_id":0}))
-        return tasks 
+        tasks=list(request.app.database["tasks"].find(taskFilters))
+        for task in tasks:
+            task["_id"] = str(task.get("_id"))
+            task["username"] = getUsername(request, task.get("user_id"))
+        return tasks
    
     except Exception as error:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
@@ -36,41 +44,46 @@ async def getTasks(request: Request, accessTokenData: dict = Depends(getAccessTo
 
 # Add a Task
 @router.post("/add", status_code=status.HTTP_201_CREATED)
-async def addTask(request: Request, taskMessage:CreateTask, accessTokenData: dict = Depends(getAccessTokenData)):
+async def addTask(request: Request, taskPayload:CreateTask, accessTokenData: dict = Depends(getAccessTokenData)):
     try:
         # Success message string
         successMessage = "Task created for"
 
         # Task properties
         task:dict = {}
-        task["message"] = taskMessage.message
+        task["message"] = taskPayload.message
         task["status"] = "Not Started"
         task["created_at"] = datetime.utcnow()
         
         # Getting access token data
-        role = accessTokenData["role"]
-        tokenUserId = accessTokenData["id"]
-
+        role = accessTokenData.get("role")
+        userId = accessTokenData.get("id")
+        
         # Checking what User ID to use for the task
         if role == "admin":
-            if(task.user_id != None):
+            if(taskPayload.userEmail != None):
                 # Checking if the user exists
-                result = request.app.database["users"].find_one({"_id": task.user_id})
-                if(result == None):
+                user = request.app.database["users"].find_one({"email": taskPayload.userEmail})
+                if(user == None):
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"Error": "User not found"})
                 
+                userId = str(user.get("_id"))
                 successMessage += " a user"
             else:               
-                task.user_id = tokenUserId
                 successMessage += " the admin"   
         else:
             successMessage += " the user"
-            task["user_id"] = tokenUserId
             
-        # Saving the task
-        request.app.database["tasks"].insert_one(task)
+        task["user_id"] = userId
         
-        return {"Message": successMessage}
+        # Saving the task
+        newTask = request.app.database["tasks"].insert_one(task)
+        
+        # Adding the task ID and username to the task object in order to return
+        task["_id"] = str(newTask.inserted_id)
+        task["username"] = getUsername(request, userId)
+
+        return {"Message": successMessage, "task":task}
     except HTTPException as error:
         raise error
     except Exception as error:
@@ -78,15 +91,20 @@ async def addTask(request: Request, taskMessage:CreateTask, accessTokenData: dic
     
 # Delete a task
 @router.delete("/delete", status_code=status.HTTP_200_OK)
-async def deleteTask(request:Request, taskId:str, accessTokenData:dict = Depends(getAccessTokenData)):
+async def deleteTask(request:Request, taskDetails: TaskDetails, accessTokenData:dict = Depends(getAccessTokenData)):
     try:
         # Checking if the task ID is valid
-        checkObjectId(taskId)
+        checkObjectId(taskDetails.taskId)
         
-        # Deleting the task
-        userId = accessTokenData.get("id")
-        result = request.app.database["tasks"].delete_one({"_id":ObjectId(taskId), "user_id":userId})
+        # Getting the access token data
+        role = accessTokenData.get("role")
         
+        if role == "admin":
+            result = request.app.database["tasks"].delete_one({"_id":ObjectId(taskDetails.taskId)})
+        else:
+            tokenUserId = accessTokenData.get("id")
+            result = request.app.database["tasks"].delete_one({"_id":ObjectId(taskDetails.taskId), "user_id":tokenUserId})
+            
         # Checking if the task has been deleted
         if(result.deleted_count == 0):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"Error":"Task not found"})
@@ -103,11 +121,16 @@ async def deleteCompletedTask(request:Request, accessTokenData:dict = Depends(ge
     try:
         # Deleting all completed tasks
         userId = accessTokenData.get("id")
-        result = request.app.database["tasks"].delete_many({"user_id":userId, "status":"Completed"})
+        role = accessTokenData.get("role")
+        
+        if role == "admin":
+            result = request.app.database["tasks"].delete_one({"status":"Completed"})
+        else:
+            result = request.app.database["tasks"].delete_one({"user_id":userId, "status":"Completed"})
         
         # Checking if any completed tasks has been deleted
         if(result.deleted_count == 0):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"Error":"Didn't find any tasks"})
+            return {"Message":"Didn't find any tasks"}
         
         return {"Message":"Completed tasks deleted successfully"}
     except HTTPException as error:
@@ -120,19 +143,26 @@ async def deleteCompletedTask(request:Request, accessTokenData:dict = Depends(ge
 async def updateTask(request:Request, task:UpdateTask, accessTokenData:dict = Depends(getAccessTokenData)):
     try:
         # Checking if the task ID is valid
-        checkObjectId(task.task_id)
+        checkObjectId(task.taskId)
         
-        userId = accessTokenData.get("id") 
-        valuesToUpdate: dict = {}
+        # Getting access token data
+        role = accessTokenData.get("role")
+        tokenUserId = accessTokenData.get("id")
         
         # Setting up the values to update in the task
+        valuesToUpdate: dict = {}
+        
         if(task.message != None):
             valuesToUpdate["message"] = task.message
         if(task.status != None):
             valuesToUpdate["status"] = task.status
             
         # Updating the task with the new values
-        result = request.app.database["tasks"].update_one({"_id":ObjectId(task.task_id), "user_id":userId}, {"$set":  valuesToUpdate})
+        if(role == "admin"):
+            result = request.app.database["tasks"].update_one({"_id":ObjectId(task.taskId)}, {"$set":  valuesToUpdate})
+        else:
+            result = request.app.database["tasks"].update_one({"_id":ObjectId(task.taskId), "user_id":tokenUserId}, {"$set":  valuesToUpdate})
+            
         
         # Checking if a task was successfully updated
         if(result.matched_count == 0):
@@ -143,5 +173,17 @@ async def updateTask(request:Request, task:UpdateTask, accessTokenData:dict = De
     except Exception as error:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
     
-    
+# Check if a task is eligible for a notification
+@router.post("/notification-eligible", status_code=status.HTTP_200_OK)
+async def checkTaskNotification(request:Request, taskDetails: TaskDetails, accessTokenData:dict = Depends(getAccessTokenData)):
+    try:
+        currentUserId = accessTokenData.get("id")
+        currentTask = request.app.database["tasks"].find_one({"_id":ObjectId(taskDetails.taskId),"user_id":currentUserId})
+        if(currentTask == None or currentTask.get("status") == "Completed"):
+            return {"answer": False}
+        return {"answer":True}
+   
+    except Exception as error:
+        print(error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
 
