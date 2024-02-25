@@ -26,9 +26,13 @@ async def getTasks(request: Request, accessTokenData: dict = Depends(getAccessTo
     try:
         # Setting up the query filters
         taskFilters:dict = {}
+        
+        # Checking the client type
+        clientType = request.headers.get('Client-Type')
     
+        # Checking the client role
         role = accessTokenData.get('role')
-        if role == "user":
+        if role == "user" or clientType == "mobile":
             taskFilters["user_id"] = accessTokenData.get("id")
 
         # Getting the tasks by the filters
@@ -181,7 +185,7 @@ async def checkTaskNotification(request:Request, taskDetails: TaskDetails, acces
         currentTask = request.app.database["tasks"].find_one({"_id":ObjectId(taskDetails.taskId),"user_id":currentUserId})
         if(currentTask == None or currentTask.get("status") == "Completed"):
             return {"answer": False}
-        return {"answer":True}
+        return {"answer":True, "message": currentTask.get("message")}
    
     except Exception as error:
         print(error)

@@ -36,8 +36,7 @@ def getAccessToken(request: Request):
         if clientType == "web":
             accessToken = request.cookies.get('access-token')
         elif clientType == "mobile":
-            # TODO: Return the access token from the headers for mobile users
-            pass
+            accessToken = request.headers.get('Authorization')
         else:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Invalid or no Client-Type header"})
 
@@ -61,16 +60,12 @@ def getAccessTokenData(request: Request):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
 
 # Set the user's access token in the response
-def setAccessTokenInResponse(request:Request,response: Response, token: str):
+def setAccessTokenInCookies(request:Request,response: Response, token: str):
     clientType = request.headers.get('Client-Type', default=None)
-    print(clientType)
 
     # Checking the source of the request
     if clientType == "web":
         response.set_cookie('access-token', token, max_age=6000, httponly=True, secure=True, samesite='none')
-    elif clientType == "mobile":
-        pass
-        # TODO: Save the access token for mobile users
     elif clientType == None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "No client type specified"})
     else:

@@ -21,7 +21,6 @@ def decodePasswordFromBase64(password):
 def encryptPassword(password: str) -> str:
     try:
         decodedPassword = decodePasswordFromBase64(password)
-        
         if(isValidPassword(decodedPassword)):
             # Adding salt and pepper to the password
             pepperedPassword = decodedPassword + PEPPER_SECRET
@@ -33,8 +32,10 @@ def encryptPassword(password: str) -> str:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"Error": "Invalid password"})
 
     except HTTPException as error:
+        print(error)
         raise error 
-    except Exception:
+    except Exception as error:
+        print(error)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
 
 
@@ -48,5 +49,6 @@ def comparePassword(password: str, hashedPassword: str) -> bool:
         return bcrypt.checkpw(pepperedPassword.encode('utf-8'), hashedPassword.encode('utf-8'))
     except HTTPException as error:
         raise error 
-    except Exception as e:
+    except Exception as error:
+        print(error)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={"Error":"Internal Server Error"})
